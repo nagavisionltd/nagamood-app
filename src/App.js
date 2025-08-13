@@ -134,7 +134,7 @@ const MoodLogger = ({ onMoodLogged }) => {
   );
 };
 
-const ActivityHub = ({ mood, onBack, onNavigate }) => {
+const ActivityHub = ({ mood, details, onBack, onNavigate }) => {
   const [isChoosing, setIsChoosing] = useState(false);
   const [chooseError, setChooseError] = useState('');
   const greeting = useMemo(() => {
@@ -150,7 +150,7 @@ const ActivityHub = ({ mood, onBack, onNavigate }) => {
     setChooseError('');
     setIsChoosing(true);
     try {
-      const { screen } = await chooseActivityForUser(mood, undefined);
+      const { screen } = await chooseActivityForUser(mood, details);
       onNavigate(screen);
     } catch (e) {
       setChooseError('Could not choose right now. Please try again.');
@@ -516,8 +516,8 @@ const LearnPage = ({ onBack }) => {
                             </div>
                             <div className="text-xs text-gray-500">{index+1} of {total}</div>
                           </div>
-                        )}
-                    </div>
+                )}
+            </div>
                 </div>
             )}
 
