@@ -93,6 +93,30 @@ const getGeminiSuggestions = async (prompt, schema) => {
     } catch(err) { console.error("Gemini suggestion API call failed:", err); throw err; }
 };
 
+// Decide best activity given mood and (optional) details
+const chooseActivityForUser = async (mood, details) => {
+    const allowed = ['watch','listen','read','learn','chat','play','connect'];
+    const prompt = `You are Aura, a supportive wellness assistant. The user feels "${mood}". Details: "${details || 'none'}".
+Based on their state, pick ONE best next activity from: watch, listen, read, learn, chat, play, connect.
+Return a JSON object with fields: screen (one of the allowed strings) and reason (short sentence).`;
+    const schema = { type: "OBJECT", properties: { screen: { type: "STRING" }, reason: { type: "STRING" } } };
+    try {
+        const result = await getGeminiSuggestions(prompt, schema);
+        const chosen = (result.screen || '').toLowerCase();
+        if (allowed.includes(chosen)) { return { screen: chosen, reason: result.reason || '' }; }
+        // Fallback: if invalid, default by mood
+        switch (mood) {
+            case 'Sad': case 'Worried': return { screen: 'watch', reason: 'Calming content first' };
+            case 'Angry': return { screen: 'listen', reason: 'Soothing audio to decompress' };
+            case 'Tired': return { screen: 'read', reason: 'Low-effort reading' };
+            case 'Happy': case 'Excited': return { screen: 'play', reason: 'Channel energy playfully' };
+            default: return { screen: 'learn', reason: 'Light engagement' };
+        }
+    } catch {
+        return { screen: 'watch', reason: 'Fallback choice' };
+    }
+};
+
 
 // --- UI COMPONENTS ---
 
@@ -111,6 +135,8 @@ const MoodLogger = ({ onMoodLogged }) => {
 };
 
 const ActivityHub = ({ mood, onBack, onNavigate }) => {
+  const [isChoosing, setIsChoosing] = useState(false);
+  const [chooseError, setChooseError] = useState('');
   const greeting = useMemo(() => {
     switch (mood) {
       case 'Happy': case 'Excited': return "Let's keep the good vibes going!";
@@ -120,9 +146,26 @@ const ActivityHub = ({ mood, onBack, onNavigate }) => {
     }
   }, [mood]);
 
+  const handleChooseForMe = async () => {
+    setChooseError('');
+    setIsChoosing(true);
+    try {
+      const { screen } = await chooseActivityForUser(mood, undefined);
+      onNavigate(screen);
+    } catch (e) {
+      setChooseError('Could not choose right now. Please try again.');
+    } finally {
+      setIsChoosing(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto p-4 md:p-8 space-y-8 animate-fade-in">
       <div className="text-center"><h1 className="text-3xl md:text-4xl font-bold text-gray-800">You're feeling <span className="text-sky-500">{mood}</span>.</h1><p className="text-gray-500 mt-2">{greeting}</p><p className="text-gray-500">What would you like to do?</p></div>
+      <div className="grid grid-cols-1">
+        <button onClick={handleChooseForMe} disabled={isChoosing} className="w-full bg-gradient-to-r from-sky-600 to-fuchsia-600 text-white font-bold py-3 rounded-xl text-md hover:from-sky-500 hover:to-fuchsia-500 focus:outline-none focus:ring-4 focus:ring-sky-500/40 transition-all duration-300 disabled:bg-gray-300 shadow-glow">{isChoosing ? 'Choosing…' : 'Choose for me'}</button>
+        {chooseError && <p className="text-center text-red-600 mt-2">{chooseError}</p>}
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-6">{activities.map(activity => ( 
         <button key={activity.name} onClick={() => onNavigate(activity.screen)} 
           className={`relative group flex flex-col items-center justify-center space-y-4 p-4 rounded-2xl text-white transition-all duration-300 ease-in-out transform hover:scale-105 overflow-hidden bg-gradient-to-br ${activity.gradient} shadow-card`}>
